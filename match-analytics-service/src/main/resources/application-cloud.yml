@@ -1,6 +1,6 @@
 datasources:
   default:
-    url: ${JDBC_DATABASE_URL}
+    url: ${ANALYTICS_JDBC_DATABASE_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver

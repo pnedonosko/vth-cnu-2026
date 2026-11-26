@@ -6,7 +6,10 @@ ifneq (,$(wildcard .env.cloud))
     export
 endif
 
-.PHONY: setup-gradle init up-db down-db test build check-cloud-env build-docker run-roster run-analytics run-rank dev-frontend dev-mock dev-api deploy-cloud deploy-frontend
+.PHONY: setup-gradle init up-db down-db test build check-cloud-env build-docker run-roster run-analytics run-rank dev-frontend dev-mock dev-api deploy-cloud deploy-frontend teardown-cloud clean-images clean-all
+
+AR_REPO ?= cnu-repo
+SERVICES ?= roster-service match-analytics-service rank-calculator-service
 
 # --- Підготовка проєкту та залежностей ---
 setup-gradle:
@@ -56,7 +59,8 @@ check-cloud-env:
 	@test -f .env.cloud || (echo "ERROR: .env.cloud not found. Copy .env.cloud.example to .env.cloud first." && exit 1)
 	@test -n "$(GCP_PROJECT_ID)" || (echo "ERROR: GCP_PROJECT_ID is not set in .env.cloud" && exit 1)
 	@test -n "$(GCP_REGION)" || (echo "ERROR: GCP_REGION is not set in .env.cloud" && exit 1)
-	@test -n "$(JDBC_DATABASE_URL)" || (echo "ERROR: JDBC_DATABASE_URL is not set in .env.cloud" && exit 1)
+	@test -n "$(ROSTER_JDBC_DATABASE_URL)" || (echo "ERROR: ROSTER_JDBC_DATABASE_URL is not set in .env.cloud" && exit 1)
+	@test -n "$(ANALYTICS_JDBC_DATABASE_URL)" || (echo "ERROR: ANALYTICS_JDBC_DATABASE_URL is not set in .env.cloud" && exit 1)
 	@test -n "$(DB_USER)" || (echo "ERROR: DB_USER is not set in .env.cloud" && exit 1)
 	@test -n "$(DB_PASSWORD)" || (echo "ERROR: DB_PASSWORD is not set in .env.cloud" && exit 1)
 
@@ -66,7 +70,7 @@ build-docker: check-cloud-env
 deploy-cloud: check-cloud-env
 	@echo "=== [1/4] Deploying rank-calculator-service ==="
 	gcloud run deploy rank-calculator-service \
-		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/valorant-repo/rank-calculator-service:latest \
+		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/cnu-repo/rank-calculator-service:latest \
 		--project=$(GCP_PROJECT_ID) \
 		--region=$(GCP_REGION) \
 		--platform=managed \
@@ -75,11 +79,11 @@ deploy-cloud: check-cloud-env
 		--cpu-boost \
 		--min-instances=0 \
 		--max-instances=3 \
-		--set-env-vars="VTH_ENVIRONMENT=cloud,JDBC_DATABASE_URL=$(JDBC_DATABASE_URL),DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD)"
+		--set-env-vars="VTH_ENVIRONMENT=cloud,DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD)"
 
 	@echo "=== [2/4] Deploying roster-service (Phase 1: without ANALYTICS_SERVICE_URL) ==="
 	gcloud run deploy roster-service \
-		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/valorant-repo/roster-service:latest \
+		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/cnu-repo/roster-service:latest \
 		--project=$(GCP_PROJECT_ID) \
 		--region=$(GCP_REGION) \
 		--platform=managed \
@@ -88,13 +92,13 @@ deploy-cloud: check-cloud-env
 		--cpu-boost \
 		--min-instances=0 \
 		--max-instances=3 \
-		--set-env-vars="VTH_ENVIRONMENT=cloud,JDBC_DATABASE_URL=$(JDBC_DATABASE_URL),DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD)"
+		--set-env-vars="VTH_ENVIRONMENT=cloud,ROSTER_JDBC_DATABASE_URL=$(ROSTER_JDBC_DATABASE_URL),DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD)"
 
 	@echo "=== [3/4] Deploying match-analytics-service ==="
 	@RANK_URL=$$(gcloud run services describe rank-calculator-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
 	ROSTER_URL=$$(gcloud run services describe roster-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
 	gcloud run deploy match-analytics-service \
-		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/valorant-repo/match-analytics-service:latest \
+		--image=$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/cnu-repo/match-analytics-service:latest \
 		--project=$(GCP_PROJECT_ID) \
 		--region=$(GCP_REGION) \
 		--platform=managed \
@@ -103,7 +107,7 @@ deploy-cloud: check-cloud-env
 		--cpu-boost \
 		--min-instances=0 \
 		--max-instances=3 \
-		--set-env-vars="VTH_ENVIRONMENT=cloud,JDBC_DATABASE_URL=$(JDBC_DATABASE_URL),DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD),ROSTER_SERVICE_URL=$$ROSTER_URL,RANK_CALCULATOR_URL=$$RANK_URL,RANK_SERVICE_URL=$$RANK_URL"
+		--set-env-vars="VTH_ENVIRONMENT=cloud,ANALYTICS_JDBC_DATABASE_URL=$(ANALYTICS_JDBC_DATABASE_URL),DB_USER=$(DB_USER),DB_PASSWORD=$(DB_PASSWORD),ROSTER_SERVICE_URL=$$ROSTER_URL,RANK_CALCULATOR_URL=$$RANK_URL,RANK_SERVICE_URL=$$RANK_URL"
 
 	@echo "=== [4/4] Phase 2 Wiring: Injecting ANALYTICS_SERVICE_URL into roster-service ==="
 	@ANALYTICS_URL=$$(gcloud run services describe match-analytics-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
@@ -118,3 +122,29 @@ deploy-frontend: check-cloud-env
 	ANALYTICS_URL=$$(gcloud run services describe match-analytics-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
 	echo "Injecting ROSTER_URL=$$ROSTER_URL and ANALYTICS_URL=$$ANALYTICS_URL"; \
 	VITE_ROSTER_SERVICE_URL=$$ROSTER_URL VITE_ANALYTICS_SERVICE_URL=$$ANALYTICS_URL npm --prefix frontend run deploy -- --project $(GCP_PROJECT_ID)
+
+# --- Cloud cleanup targets (teardown) ---
+
+teardown-cloud: check-cloud-env
+	@echo "=== Deleting Cloud Run services in $(GCP_REGION) ==="
+	@for svc in $(SERVICES); do \
+		gcloud run services delete $$svc \
+			--region=$(GCP_REGION) \
+			--project=$(GCP_PROJECT_ID) \
+			--quiet 2>/dev/null || true; \
+	done
+	@echo "=== Disabling public Firebase Hosting site ==="
+	npx --prefix frontend firebase hosting:disable --project=$(GCP_PROJECT_ID) --force 2>/dev/null || true
+	@echo "=== Services stopped. Images kept in $(AR_REPO). ==="
+
+clean-images: check-cloud-env
+	@echo "=== Cleaning images in $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(AR_REPO) ==="
+	@for svc in $(SERVICES); do \
+		gcloud artifacts docker images delete \
+			$(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(AR_REPO)/$$svc \
+			--delete-tags \
+			--quiet 2>/dev/null || true; \
+	done
+
+clean-all: teardown-cloud clean-images
+	@echo "=== Full GCP and Firebase cleanup complete. ==="

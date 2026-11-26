@@ -8,6 +8,7 @@ dist/
 .env.cloud
 .firebaserc
 frontend/.firebaserc
+frontend/.firebase
 frontend/.env.cloud.local
 .idea/
 *.iml

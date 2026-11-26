@@ -57,7 +57,7 @@ subprojects {
         to {
             val gcpProject = System.getenv("GCP_PROJECT_ID") ?: "YOUR_PROJECT_ID"
             val gcpRegion = System.getenv("GCP_REGION") ?: "us-central1"
-            image = "$gcpRegion-docker.pkg.dev/$gcpProject/valorant-repo/${project.name}:latest"
+            image = "$gcpRegion-docker.pkg.dev/$gcpProject/cnu-repo/${project.name}:latest"
         }
         container {
             ports = listOf("8080")

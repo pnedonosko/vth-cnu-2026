@@ -192,25 +192,52 @@
    ```
 2. Увімкніть необхідні API (Cloud Run та Artifact Registry):
    ```bash
-   gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+   gcloud services enable \
+      run.googleapis.com \
+      artifactregistry.googleapis.com \
+      containerregistry.googleapis.com \
+      firebasehosting.googleapis.com
    ```
-3. Створіть репозиторій для Docker-образів (один раз на проєкт):
+3. Автентифікуйтесь та створіть репозиторій для Docker-образів в GCP Artifact Registry (один раз на проєкт):
    ```bash
-   gcloud artifacts repositories create valorant-repo \
+   gcloud auth configure-docker # login in gcr.io
+
+   gcloud artifacts repositories create cnu-repo \
      --repository-format=docker \
-     --location=us-central1
-   gcloud auth configure-docker us-central1-docker.pkg.dev
+     --location=${GCP_REGION} \
+     --description="CNU Docker images"
+
+   gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev # login in your region Artifact Registry
    ```
 
-### Крок В. Конфігурація та автоматичний деплой
+### Крок В. Автентифікація у Firebase (один раз на проект — обов’язково перед деплоєм фронтенду)
+1. Увійдіть у Firebase CLI:
+   ```bash
+   npx firebase-tools login
+   ```
+   Це відкриє браузер для автентифікації через Google акаунт.
+
+### Крок Г. Конфігурація та автоматизований деплой
 1. Скопіюйте шаблон змінних оточення:
    ```bash
    cp .env.cloud.example .env.cloud
    ```
-2. Впишіть у `.env.cloud` ваш `GCP_PROJECT_ID`, `NEON_ROSTER_JDBC_URL`, `NEON_ANALYTICS_JDBC_URL`, `NEON_DB_USER` та `NEON_DB_PASSWORD`.
-3. Зберіть Docker-образи через Jib (`make build-docker`) або одразу виконайте повний деплой у Cloud Run однією командою:
+2. Впишіть у `.env.cloud` ваш `GCP_PROJECT_ID`, `GCP_REGION`, `ROSTER_JDBC_DATABASE_URL`, `ANALYTICS_JDBC_DATABASE_URL`, `DB_USER` та `DB_PASSWORD`. `GCP_REGION` - рекомендовано залишити `europe-west3` - PostgreSQL працює в тій же зоні.
+3. Зберіть Docker-образи через Jib та опублікуйте в GCP Artifact Registry
+   ```bash
+   make build-docker
+   ```
+4. Виконайте деплой всіх мікросервісів у Cloud Run:
    ```bash
    make deploy-cloud
    ```
    *Під час старту в хмарі сервіси активують профіль `VTH_ENVIRONMENT=cloud` (`application-cloud.yml`), де налаштований пул HikariCP під serverless cold-start Neon, а Flyway автоматично застосує SQL-міграції.*
-4. Отримані в консолі URL-адреси впишіть у `frontend/.env.cloud` та задеплойте фронтенд у Firebase Hosting (`make deploy-frontend`).
+5. Задеплойте фронтенд у Firebase Hosting.
+   ```bash
+   make deploy-frontend
+   ```
+6. По завершенню роботи — зупиніть мікросервіси та фронтенд, видаліть образи в GCP Artifact Registry.
+   ```bash
+   make clean-all
+   ```
+
