@@ -117,5 +117,4 @@ deploy-frontend: check-cloud-env
 	@ROSTER_URL=$$(gcloud run services describe roster-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
 	ANALYTICS_URL=$$(gcloud run services describe match-analytics-service --project=$(GCP_PROJECT_ID) --region=$(GCP_REGION) --format='value(status.url)'); \
 	echo "Injecting ROSTER_URL=$$ROSTER_URL and ANALYTICS_URL=$$ANALYTICS_URL"; \
-	VITE_ROSTER_SERVICE_URL=$$ROSTER_URL VITE_ANALYTICS_SERVICE_URL=$$ANALYTICS_URL npm --prefix frontend run build:cloud && \
-	npx --prefix frontend firebase-tools deploy --only hosting --project $(GCP_PROJECT_ID)
+	VITE_ROSTER_SERVICE_URL=$$ROSTER_URL VITE_ANALYTICS_SERVICE_URL=$$ANALYTICS_URL npm --prefix frontend run deploy -- --project $(GCP_PROJECT_ID)
