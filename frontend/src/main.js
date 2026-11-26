@@ -14,14 +14,6 @@ export function resolveHalUrl(href) {
     return /^https?:\/\//i.test(href) ? href : `${ROSTER_SERVICE}${href}`;
 }
 
-// Resolves a HAL link href to an absolute URL. Server may emit either a
-// service-relative href ("/api/v1/rosters/...") or an absolute cross-service href
-// ("http://analytics.../submit"). The client must not know which service owns a
-// link — that is the whole point of following _links.
-export function resolveHalUrl(href) {
-    return /^https?:\/\//i.test(href) ? href : `${ROSTER_SERVICE}${href}`;
-}
-
 const CLOUD_TIMEOUT_MS = 30000;
 const WAKING_HINT_DELAY_MS = 1500;
 
