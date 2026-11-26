@@ -6,6 +6,7 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("io.micronaut.sql:micronaut-jdbi")
     implementation("io.micronaut:micronaut-http-client")
+    implementation("io.micronaut:micronaut-retry")
     runtimeOnly("io.micronaut.sql:micronaut-jdbc-hikari")
     runtimeOnly("org.postgresql:postgresql")
     runtimeOnly("ch.qos.logback:logback-classic")

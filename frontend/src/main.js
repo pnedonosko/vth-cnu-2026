@@ -14,6 +14,76 @@ export function resolveHalUrl(href) {
     return /^https?:\/\//i.test(href) ? href : `${ROSTER_SERVICE}${href}`;
 }
 
+// Resolves a HAL link href to an absolute URL. Server may emit either a
+// service-relative href ("/api/v1/rosters/...") or an absolute cross-service href
+// ("http://analytics.../submit"). The client must not know which service owns a
+// link — that is the whole point of following _links.
+export function resolveHalUrl(href) {
+    return /^https?:\/\//i.test(href) ? href : `${ROSTER_SERVICE}${href}`;
+}
+
+const CLOUD_TIMEOUT_MS = 30000;
+const WAKING_HINT_DELAY_MS = 1500;
+
+/**
+ * apiFetch — hardened wrapper around fetch() for Cloud Run cold-start resilience.
+ *
+ * WHY it exists:
+ *   - match-analytics-service, roster-service, and rank-calculator-service can
+ *     scale to zero instances on Cloud Run (min-instances=0). On first request
+ *     after ~15 min of inactivity the JVM + Flyway + Neon SSL handshake takes
+ *     several seconds; plain fetch() would fail before downstream boots.
+ *   - The frontend must not hardcode service URLs; this wrapper works with URLs
+ *     resolved via resolveHalUrl() (absolute cross-service hrefs pass through,
+ *     relative hrefs get the ROSTER_SERVICE base prepended).
+ *
+ * WHAT it does:
+ *   1. Applies a 30 s abort timeout (AbortSignal.timeout(30000)) so a request
+ *      cannot block forever while a downstream service is cold-starting.
+ *   2. Shows a transient "WAKING UP CLOUD SERVICES..." hint in the env badge
+ *      after 1.5 s if the request is still pending, then restores the badge.
+ *   3. Delegates to native fetch() with merged signal; errors propagate to the
+ *      caller for standard try/catch handling.
+ *
+ * CAVEATS:
+ *   - AbortSignal.timeout() is not available in very old browsers; in that case
+ *     no timeout is applied (silent fallback).
+ *   - This does NOT retry automatically — retry logic lives server-side
+ *     (@Retryable on RosterServiceClient / RankCalculatorClient). The frontend
+ *     caller is responsible for retry UI if desired.
+ *   - The waking timer only updates #env-mode-badge; it does not block or delay
+ *     the underlying fetch.
+ */
+export async function apiFetch(url, options = {}) {
+    const envBadge = document.getElementById('env-mode-badge');
+    const prevBadgeText = envBadge ? envBadge.innerText : null;
+    const wakingTimer = setTimeout(() => {
+        if (envBadge) envBadge.innerText = 'WAKING UP CLOUD SERVICES...';
+    }, WAKING_HINT_DELAY_MS);
+    try {
+        const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+            ? AbortSignal.timeout(CLOUD_TIMEOUT_MS)
+            : undefined);
+        return await fetch(url, signal ? { ...options, signal } : options);
+    } finally {
+        clearTimeout(wakingTimer);
+        if (envBadge && prevBadgeText !== null) {
+            envBadge.innerText = prevBadgeText;
+        }
+    }
+}
+
+export function prewarmCloudServices() {
+    // Warmup the cloud services by calling their health endpoints
+    // This is a fire-and-forget call, so we don't need to wait for it
+    if (ROSTER_SERVICE && ROSTER_SERVICE !== 'mock') {
+        fetch(`${ROSTER_SERVICE}/health`).catch(() => {});
+    }
+    if (ANALYTICS_SERVICE && ANALYTICS_SERVICE !== 'mock') {
+        fetch(`${ANALYTICS_SERVICE}/health`).catch(() => {});
+    }
+}
+
 // Mock backend ONLY (used when ROSTER_SERVICE === 'mock'). Mirrors
 // RosterController.toHalResponse(): given a roster's current state, it returns the
 // _links the real server *would* return. Action handlers read currentRoster._links
@@ -56,7 +126,7 @@ if (document.getElementById('user-select')) {
         const selectedUser = select.value; // player id -> X-Player-Id
         const selectedTag = select.selectedOptions[0].dataset.playerTag; // player tag -> login
         try {
-            const res = await fetch(`${ROSTER_SERVICE}/api/v1/auth/login`, {
+            const res = await apiFetch(`${ROSTER_SERVICE}/api/v1/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ playerTag: selectedTag, pin: "1234" })
@@ -153,7 +223,7 @@ export async function loadRoster() {
 
     try {
         // Hardcoded roster URL with our fixed ID. In real life this would be provided from roster selection UI or by the component caller.
-        const res = await fetch(`${ROSTER_SERVICE}/api/v1/rosters/r-101`, {
+        const res = await apiFetch(`${ROSTER_SERVICE}/api/v1/rosters/r-101`, {
             headers: { 
                 'X-Player-Id': CURRENT_USER_ID,
                 'Authorization': `Bearer ${token}`
@@ -368,7 +438,7 @@ window.selectAgentFromCatalog = async (agentKey) => {
         alert("This roster does not allow adding agents right now.");
         return;
     }
-    const res = await fetch(`${resolveHalUrl(addLink.href)}`, {
+    const res = await apiFetch(`${resolveHalUrl(addLink.href)}`, {
         method: addLink.method,
         headers: {
             'Content-Type': 'application/json',
@@ -412,7 +482,7 @@ window.removeAgent = async (agentKey) => {
         return;
     }
 
-    const res = await fetch(resolveHalUrl(removeLink.href), {
+    const res = await apiFetch(resolveHalUrl(removeLink.href), {
         method: removeLink.method,
         headers: {
             'X-Player-Id': CURRENT_USER_ID,
@@ -441,7 +511,7 @@ async function executeHalAction(link) {
     }
 
     try {
-        const res = await fetch(resolveHalUrl(link.href), {
+        const res = await apiFetch(resolveHalUrl(link.href), {
             method: link.method,
             headers: { 
                 'X-Player-Id': CURRENT_USER_ID,
@@ -476,7 +546,7 @@ async function unarchiveRoster() {
     }
 
     try {
-        const res = await fetch(resolveHalUrl(unarchiveLink.href), {
+        const res = await apiFetch(resolveHalUrl(unarchiveLink.href), {
             method: unarchiveLink.method,
             headers: { 
                 'X-Player-Id': CURRENT_USER_ID,
@@ -563,7 +633,7 @@ if (matchForm) {
                 return;
             }
 
-            const res = await fetch(resolveHalUrl(submitLink.href), {
+            const res = await apiFetch(resolveHalUrl(submitLink.href), {
                 method: submitLink.method,
                 headers: { 
                     'Content-Type': 'application/json',
@@ -635,6 +705,7 @@ function renderMatchResult(data) {
 
 if (typeof window !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
+        prewarmCloudServices();
         fetchRiotCatalog();
         loadRoster();
     });

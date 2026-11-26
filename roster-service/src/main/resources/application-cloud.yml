@@ -1,7 +1,15 @@
 datasources:
   default:
+    url: ${JDBC_DATABASE_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
     maximum-pool-size: 5
     minimum-idle: 0
     idle-timeout: 60000
     connection-timeout: 15000
     max-lifetime: 300000
+
+analytics:
+  service:
+    url: ${ANALYTICS_SERVICE_URL:}

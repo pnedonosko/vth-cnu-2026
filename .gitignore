@@ -6,6 +6,8 @@ node_modules/
 dist/
 **/dist/
 .env.cloud
+.firebaserc
+frontend/.firebaserc
 frontend/.env.cloud.local
 .idea/
 *.iml

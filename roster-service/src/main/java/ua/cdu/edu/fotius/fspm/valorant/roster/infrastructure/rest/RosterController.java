@@ -7,6 +7,7 @@ import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+import io.micronaut.context.annotation.Property;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -53,12 +54,15 @@ public class RosterController {
 
     private final RosterApplicationService rosterService;
     private final JwtTokenService tokenService;
+    private final String analyticsServiceUrl;
 
     @Inject
     public RosterController(RosterApplicationService rosterService,
-                            JwtTokenService tokenService) {
+                            JwtTokenService tokenService,
+                            @Nullable @Property(name = "analytics.service.url") String analyticsServiceUrl) {
         this.rosterService = rosterService;
         this.tokenService = tokenService;
+        this.analyticsServiceUrl = analyticsServiceUrl;
     }
 
     @Serdeable
@@ -288,7 +292,12 @@ public class RosterController {
             if (isCaptain) {
                 links.put("unlock", new LinkDto("/api/v1/rosters/" + id + "/unlock", "POST"));
             }
-            links.put("submit_match", new LinkDto("http://localhost:8081/api/v1/matches/submit", "POST"));
+            if (analyticsServiceUrl != null && !analyticsServiceUrl.isBlank()) {
+                String baseUrl = analyticsServiceUrl.endsWith("/")
+                    ? analyticsServiceUrl.substring(0, analyticsServiceUrl.length() - 1)
+                    : analyticsServiceUrl;
+                links.put("submit_match", new LinkDto(baseUrl + "/api/v1/matches/submit", "POST"));
+            }
         } else if (roster.getStatus() == RosterStatus.ARCHIVED) {
             if (isCaptain) {
                 links.put("unarchive", new LinkDto("/api/v1/rosters/" + id + "/unarchive", "POST"));

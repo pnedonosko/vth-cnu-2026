@@ -4,3 +4,7 @@ datasources:
     username: ${DB_USER:`postgres`}
     password: ${DB_PASSWORD:`postgrespassword`}
     driver-class-name: org.postgresql.Driver
+
+analytics:
+  service:
+    url: ${ANALYTICS_SERVICE_URL:`http://localhost:8081`}

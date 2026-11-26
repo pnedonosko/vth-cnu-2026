@@ -47,6 +47,12 @@ subprojects {
     extensions.configure<com.google.cloud.tools.jib.gradle.JibExtension> {
         from {
             image = "eclipse-temurin:25-jre-alpine"
+            platforms {
+                platform {
+                    architecture = "amd64"
+                    os = "linux"
+                }
+            }
         }
         to {
             val gcpProject = System.getenv("GCP_PROJECT_ID") ?: "YOUR_PROJECT_ID"
@@ -59,6 +65,9 @@ subprojects {
                 "-Xms64m",
                 "-Xmx256m",
                 "-XX:+UseSerialGC"
+            )
+            environment = mapOf(
+                "VTH_ENVIRONMENT" to "cloud"
             )
         }
     }

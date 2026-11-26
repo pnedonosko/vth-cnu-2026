@@ -8,9 +8,10 @@
     "dev:mock": "vite --mode mock",
     "dev:cloud": "vite --mode cloud",
     "build": "vite build",
+    "build:cloud": "vite build --mode cloud",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "vite build && firebase deploy --only hosting"
+    "deploy": "vite build --mode cloud && firebase deploy --only hosting"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",
