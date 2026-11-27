@@ -1,4 +1,11 @@
-# GCP Cloud Run + Neon + Firebase Deployment Design (`vth-cnu-2026`)
+# ADR 000 — GCP Cloud Run + Neon + Firebase Deployment Design (`vth-cnu-2026`)
+
+**Статус:** Accepted
+**Дата:** 2026-11-25
+**Автор:** Петро Недоноско (nedonosko.petro1126@vu.cdu.edu.ua)
+**Область:** початковий дизайн та промпт
+
+---
 
 ## 1. Architectural Overview & Goals
 
