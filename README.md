@@ -178,7 +178,7 @@
 Кожен студент розгортає власну копію системи у своєму Google Cloud проєкті та безкоштовному інстансі **Neon**.
 
 ### Крок А. Створення баз даних у Neon
-1. Зареєструйтесь на [neon.tech](https://neon.tech) та створіть новий проєкт (**PostgreSQL 18**, регіон бажано обрати найближчий до вашого Cloud Run, наприклад `aws-us-east-1` для `us-central1`).
+1. Зареєструйтесь на [neon.tech](https://neon.tech) та створіть новий проєкт (**PostgreSQL 18**, регіон бажано обрати найближчий до вашого Cloud Run: обирайте "AWS Europe Central 1 (Frankfurt)" відповідно для `europe-west3` в Google Cloud Run.
 2. У вкладці **Databases** створіть дві окремі бази даних (дотримання *Database per Service*):
    * `roster_db`
    * `analytics_db`
@@ -204,10 +204,10 @@
 
    gcloud artifacts repositories create cnu-repo \
      --repository-format=docker \
-     --location=${GCP_REGION} \
+     --location=europe-west3 \
      --description="CNU Docker images"
 
-   gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev # login in your region Artifact Registry
+   gcloud auth configure-docker europe-west3-docker.pkg.dev # login in your region Artifact Registry
    ```
 
 ### Крок В. Автентифікація у Firebase (один раз на проект — обов’язково перед деплоєм фронтенду)
@@ -222,7 +222,7 @@
    ```bash
    cp .env.cloud.example .env.cloud
    ```
-2. Впишіть у `.env.cloud` ваш `GCP_PROJECT_ID`, `GCP_REGION`, `ROSTER_JDBC_DATABASE_URL`, `ANALYTICS_JDBC_DATABASE_URL`, `DB_USER` та `DB_PASSWORD`. `GCP_REGION` - рекомендовано залишити `europe-west3` - PostgreSQL працює в тій же зоні.
+2. Впишіть у `.env.cloud` ваш `GCP_PROJECT_ID`, `GCP_REGION` (=`europe-west3`), `ROSTER_JDBC_DATABASE_URL`, `ANALYTICS_JDBC_DATABASE_URL`, `DB_USER` та `DB_PASSWORD`. `GCP_REGION` - рекомендовано залишити `europe-west3` - PostgreSQL працює в тій же зоні.
 3. Зберіть Docker-образи через Jib та опублікуйте в GCP Artifact Registry
    ```bash
    make build-docker
